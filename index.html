@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>程序化树 · Procedural Tree</title>
+<style>
+  :root {
+    --ink: #3b3128;
+    --ink-mid: #6f6152;
+    --ink-soft: #a3947f;
+    --moss: #55703f;
+    --moss-deep: #455c33;
+    --paper: rgba(255, 253, 249, 0.84);
+    --line: rgba(90, 72, 52, 0.10);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #f1eadf;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #view {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+
+  .vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 52% 42%, rgba(255,255,255,0) 42%, rgba(122,100,70,0.13) 100%);
+  }
+
+  .panel {
+    position: fixed;
+    left: 20px;
+    top: 20px;
+    width: 262px;
+    padding: 16px 16px 14px;
+    background: var(--paper);
+    backdrop-filter: blur(16px) saturate(1.25);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    border-radius: 16px;
+    box-shadow: 0 10px 34px rgba(92, 70, 44, 0.13), 0 1px 2px rgba(92, 70, 44, 0.06);
+    user-select: none;
+  }
+
+  .title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    margin: 0 0 3px;
+  }
+
+  .sub {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    margin: 0 0 15px;
+    line-height: 1.5;
+  }
+
+  .group { margin-bottom: 13px; }
+
+  .label {
+    font-size: 10.5px;
+    letter-spacing: 1.2px;
+    color: var(--ink-soft);
+    margin-bottom: 7px;
+    text-transform: uppercase;
+  }
+
+  .chips { display: flex; gap: 5px; }
+
+  .chip {
+    flex: 1;
+    padding: 7px 0;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--ink-mid);
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.16s, color 0.16s, border-color 0.16s, transform 0.1s;
+  }
+
+  .chip:hover { background: rgba(255, 255, 255, 0.95); }
+
+  .chip:active { transform: scale(0.97); }
+
+  .chip.on {
+    background: var(--moss);
+    border-color: var(--moss);
+    color: #fdfbf6;
+  }
+
+  .sliders { margin-bottom: 15px; }
+
+  .sliders label {
+    display: block;
+    font-size: 11.5px;
+    color: var(--ink-mid);
+    margin-bottom: 9px;
+  }
+
+  .sliders label span {
+    float: right;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    margin-top: 7px;
+    background: rgba(120, 100, 75, 0.18);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--moss);
+    border: 2px solid #fffdf9;
+    box-shadow: 0 1px 3px rgba(60, 45, 30, 0.35);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--moss);
+    border: 2px solid #fffdf9;
+  }
+
+  button.act {
+    width: 100%;
+    padding: 10px 0;
+    font-family: inherit;
+    font-size: 12.5px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.16s, transform 0.1s, border-color 0.16s;
+  }
+
+  button.act:active { transform: scale(0.985); }
+
+  .primary {
+    background: var(--moss);
+    border: 1px solid var(--moss);
+    color: #fdfbf6;
+    font-weight: 500;
+    margin-bottom: 7px;
+  }
+
+  .primary:hover { background: var(--moss-deep); }
+
+  .secondary {
+    background: transparent;
+    border: 1px solid rgba(120, 100, 75, 0.24);
+    color: var(--ink-mid);
+  }
+
+  .secondary:hover { background: rgba(255, 255, 255, 0.7); }
+
+  .stats {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 13px;
+    padding-top: 11px;
+    border-top: 1px solid var(--line);
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stats b {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-mid);
+    margin-top: 2px;
+  }
+
+  .hint {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11.5px;
+    color: rgba(90, 74, 56, 0.42);
+    letter-spacing: 0.3px;
+    pointer-events: none;
+  }
+
+  #toast {
+    position: fixed;
+    bottom: 44px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    font-size: 12px;
+    color: var(--moss);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+  }
+
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  #loading {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1eadf;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    letter-spacing: 1px;
+    transition: opacity 0.5s;
+    z-index: 10;
+  }
+
+  #loading.hidden { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<canvas id="view"></canvas>
+<div class="vignette"></div>
+
+<div class="panel">
+  <h1 class="title">程序化树</h1>
+  <p class="sub">零模型文件 · 实时生成 · 可导出 GLB</p>
+
+  <div class="group">
+    <div class="label">树种</div>
+    <div class="chips" id="species"></div>
+  </div>
+
+  <div class="group">
+    <div class="label">季节</div>
+    <div class="chips" id="season"></div>
+  </div>
+
+  <div class="sliders">
+    <label>枝干层级 <span id="v-level">4</span>
+      <input type="range" id="level" min="2" max="5" step="1" value="4">
+    </label>
+    <label>叶片密度 <span id="v-density">1.0</span>
+      <input type="range" id="density" min="0.3" max="2" step="0.1" value="1">
+    </label>
+    <label>风力 <span id="v-wind">0.60</span>
+      <input type="range" id="wind" min="0" max="2" step="0.05" value="0.6">
+    </label>
+  </div>
+
+  <button id="regen" class="act primary">重新生成</button>
+  <button id="export" class="act secondary">导出 GLB</button>
+
+  <div class="stats">
+    <div>枝条<b id="s-branch">0</b></div>
+    <div>叶片<b id="s-leaf">0</b></div>
+    <div>面数<b id="s-tri">0</b></div>
+    <div>种子<b id="s-seed">0</b></div>
+  </div>
+</div>
+
+<div class="hint">拖拽旋转 · 滚轮缩放</div>
+<div id="toast"></div>
+
+<script src="vendor/three.min.js"></script>
+<script src="src/noise.js"></script>
+<script src="src/tree.js"></script>
+<script src="src/export.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
